@@ -1,13 +1,19 @@
-import { redirect } from '@sveltejs/kit'
+import { redirect } from '@sveltejs/kit';
 
-const DISCORD_CLIENT_ID = import.meta.env.VITE_DISCORD_CLIENT_ID
-const DISCORD_REDIRECT_URI = import.meta.env.VITE_DISCORD_REDIRECT_URI
-const DISCORD_ENDPOINT = `https://discord.com/api/oauth2/authorize?client_id=${DISCORD_CLIENT_ID}&redirect_uri=${encodeURIComponent(
-	DISCORD_REDIRECT_URI
-)}&response_type=code&scope=identify%20email%20guilds`
+import {
+	VITE_DISCORD_CLIENT_ID,
+	VITE_DISCORD_REDIRECT_URI,
+} from '$env/static/private';
 
-import type { PageServerLoad } from './$types'
+import type { PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async () => {
-	throw redirect(302, DISCORD_ENDPOINT)
-}
+export const load: PageServerLoad = async ({ url }) => {
+	const hrefUrl = url.searchParams.get('href');
+	const DISCORD_ENDPOINT = `https://discord.com/api/oauth2/authorize?client_id=${VITE_DISCORD_CLIENT_ID}&redirect_uri=${encodeURIComponent(
+		`${VITE_DISCORD_REDIRECT_URI}${
+			hrefUrl != undefined ? `?href=${hrefUrl}&` : ''
+		}`
+	)}&response_type=code&scope=identify%20email%20guilds`;
+
+	throw redirect(302, DISCORD_ENDPOINT);
+};

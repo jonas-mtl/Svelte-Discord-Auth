@@ -5,14 +5,13 @@ import {
 	VITE_DISCORD_REDIRECT_URI,
 	ENCRYPTION_KEY,
 	ENABLE_DB,
-} from '$env/static/private'
+} from '$env/static/private';
 
-import { redirect } from '@sveltejs/kit'
-import CryptoJS from 'crypto-js'
+import { redirect } from '@sveltejs/kit';
+import CryptoJS from 'crypto-js';
 
-import type { IUser } from '$lib/Schemas/userProfile.js'
-import DB, { Roles } from '$lib/Schemas/userProfile.js'
-import type { Model } from 'mongoose'
+import type { IUser } from '$lib/Schemas/userProfile.js';
+import DB, { Roles } from '$lib/Schemas/userProfile.js';
 
 /**
  * @type {import('@sveltejs/kit').RequestHandler}
@@ -20,10 +19,11 @@ import type { Model } from 'mongoose'
 export async function GET({ url, cookies, locals }: any) {
 	// redirect user if logged in
 	if (locals.user) {
-		throw redirect(302, '/')
+		throw redirect(302, '/');
 	}
 
-	const returnCode = url.searchParams.get('code')
+	const returnCode = url.searchParams.get('code');
+	const hrefUrl = url.searchParams.get('href');
 
 	// fetch access & refresh token
 	const dataObject = {
@@ -33,7 +33,7 @@ export async function GET({ url, cookies, locals }: any) {
 		redirect_uri: VITE_DISCORD_REDIRECT_URI,
 		code: returnCode,
 		scope: 'identify email guilds',
-	}
+	};
 
 	const discordCodeRequest = await fetch(
 		'https://discord.com/api/oauth2/token',
@@ -42,9 +42,9 @@ export async function GET({ url, cookies, locals }: any) {
 			body: new URLSearchParams(dataObject as any),
 			headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
 		}
-	)
+	);
 
-	const discordCodeRequestJSON = await discordCodeRequest.json()
+	const discordCodeRequestJSON = await discordCodeRequest.json();
 
 	// fetch userdata
 	const discordUserDataRequest = await fetch(
@@ -54,16 +54,16 @@ export async function GET({ url, cookies, locals }: any) {
 				Authorization: `Bearer ${discordCodeRequestJSON.access_token}`,
 			},
 		}
-	)
-	const discordUserDataRequestJSON = await discordUserDataRequest.json()
+	);
+	const discordUserDataRequestJSON = await discordUserDataRequest.json();
 
 	if (ENABLE_DB === 'true') {
 		// check if user exists in database
-		let dbUser: IUser
+		let dbUser: IUser;
 
 		dbUser = (await DB.findOne({
 			userID: discordUserDataRequestJSON.id,
-		}).catch(() => {})) as IUser
+		}).catch(() => {})) as IUser;
 
 		// create or update database user
 		if (!dbUser) {
@@ -74,8 +74,8 @@ export async function GET({ url, cookies, locals }: any) {
 				dcData: discordUserDataRequestJSON,
 				role: Roles.USER,
 			}).catch(async (err: Error) => {
-				console.log(err)
-			})) as IUser
+				console.log(err);
+			})) as IUser;
 		} else {
 			dbUser = (await dbUser
 				.updateOne({
@@ -86,8 +86,8 @@ export async function GET({ url, cookies, locals }: any) {
 					role: Roles.USER,
 				})
 				.catch(async (err: Error) => {
-					console.log(err)
-				})) as IUser
+					console.log(err);
+				})) as IUser;
 		}
 	}
 
@@ -98,7 +98,7 @@ export async function GET({ url, cookies, locals }: any) {
 		sameSite: 'strict',
 		secure: process.env.NODE_ENV === 'production',
 		maxAge: discordCodeRequestJSON.expires_in,
-	})
+	});
 
 	cookies.set('dc_session_refresh', discordCodeRequestJSON.refresh_token, {
 		path: '/',
@@ -106,10 +106,12 @@ export async function GET({ url, cookies, locals }: any) {
 		sameSite: 'strict',
 		secure: process.env.NODE_ENV === 'production',
 		maxAge: 30 * 24 * 60 * 60 * 1000,
-	})
+	});
 
 	// redirect the user
-	const urlRedirect = `/profile?token=${CryptoJS.AES.encrypt(
+	const urlRedirect = `/${
+		hrefUrl != undefined ? hrefUrl : 'profile'
+	}?token=${CryptoJS.AES.encrypt(
 		discordCodeRequestJSON.access_token,
 		ENCRYPTION_KEY
 	)}&expires=${
@@ -117,9 +119,7 @@ export async function GET({ url, cookies, locals }: any) {
 	}&refresh=${CryptoJS.AES.encrypt(
 		discordCodeRequestJSON.refresh_token,
 		ENCRYPTION_KEY
-	)}`
+	)}`;
 
-	console.log(urlRedirect)
-
-	throw redirect(302, urlRedirect)
+	throw redirect(302, urlRedirect);
 }
